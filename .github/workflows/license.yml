@@ -20,7 +20,7 @@ name: license
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, license ]
   pull_request:
     branches: [ master ]
 
