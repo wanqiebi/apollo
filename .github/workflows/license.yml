@@ -32,4 +32,4 @@ jobs:
     - name: Check License
       uses: apache/skywalking-eyes/header@5b7ee1731d036b5aac68f8bd3fc9e6f98ada082e
     - name: Check License
-      uses: apache/skywalking-eyes/dependency @5b7ee1731d036b5aac68f8bd3fc9e6f98ada082e
+      uses: apache/skywalking-eyes/dependency@5b7ee1731d036b5aac68f8bd3fc9e6f98ada082e
