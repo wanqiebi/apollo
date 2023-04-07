@@ -33,6 +33,7 @@ header:
     - '**/*.ftl'
     - '**/*.iml'
     - '**/*.tpl'
+    - '**/*.txt'
     - '**/*.factories'
     - '**/*.handlers'
     - '**/*.schemas'
