@@ -52,3 +52,10 @@ header:
   comment: on-failure
 
   license-location-threshold: 130
+
+dependency:
+  files:
+    - pom.xml
+
+
+
