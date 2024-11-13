@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.configservice.controller;
 
 import com.ctrip.framework.apollo.biz.config.BizConfig;
@@ -5,6 +21,7 @@ import com.ctrip.framework.apollo.biz.entity.ReleaseMessage;
 import com.ctrip.framework.apollo.biz.message.ReleaseMessageListener;
 import com.ctrip.framework.apollo.biz.message.Topics;
 import com.ctrip.framework.apollo.biz.utils.EntityManagerUtil;
+import com.ctrip.framework.apollo.biz.utils.ReleaseMessageKeyGenerator;
 import com.ctrip.framework.apollo.common.exception.BadRequestException;
 import com.ctrip.framework.apollo.configservice.service.ReleaseMessageServiceWithCache;
 import com.ctrip.framework.apollo.configservice.util.NamespaceUtil;
@@ -14,7 +31,6 @@ import com.ctrip.framework.apollo.core.ConfigConsts;
 import com.ctrip.framework.apollo.core.dto.ApolloConfigNotification;
 import com.ctrip.framework.apollo.core.utils.ApolloThreadFactory;
 import com.ctrip.framework.apollo.tracer.Tracer;
-import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -56,8 +72,7 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
   private static final Logger logger = LoggerFactory.getLogger(NotificationControllerV2.class);
   private final Multimap<String, DeferredResultWrapper> deferredResults =
       Multimaps.synchronizedSetMultimap(TreeMultimap.create(String.CASE_INSENSITIVE_ORDER, Ordering.natural()));
-  private static final Splitter STRING_SPLITTER =
-      Splitter.on(ConfigConsts.CLUSTER_NAMESPACE_SEPARATOR).omitEmptyStrings();
+
   private static final Type notificationsTypeReference =
       new TypeToken<List<ApolloConfigNotification>>() {
       }.getType();
@@ -71,7 +86,6 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
   private final Gson gson;
   private final BizConfig bizConfig;
 
-  @Autowired
   public NotificationControllerV2(
       final WatchKeysUtil watchKeysUtil,
       final ReleaseMessageServiceWithCache releaseMessageService,
@@ -106,19 +120,19 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
     }
 
     if (CollectionUtils.isEmpty(notifications)) {
-      throw new BadRequestException("Invalid format of notifications: " + notificationsAsString);
+      throw BadRequestException.invalidNotificationsFormat(notificationsAsString);
     }
-    
+
     Map<String, ApolloConfigNotification> filteredNotifications = filterNotifications(appId, notifications);
 
     if (CollectionUtils.isEmpty(filteredNotifications)) {
-      throw new BadRequestException("Invalid format of notifications: " + notificationsAsString);
+      throw BadRequestException.invalidNotificationsFormat(notificationsAsString);
     }
-    
+
     DeferredResultWrapper deferredResultWrapper = new DeferredResultWrapper(bizConfig.longPollingTimeoutInMilli());
     Set<String> namespaces = Sets.newHashSetWithExpectedSize(filteredNotifications.size());
     Map<String, Long> clientSideNotifications = Maps.newHashMapWithExpectedSize(filteredNotifications.size());
-    
+
     for (Map.Entry<String, ApolloConfigNotification> notificationEntry : filteredNotifications.entrySet()) {
       String normalizedNamespace = notificationEntry.getKey();
       ApolloConfigNotification notification = notificationEntry.getValue();
@@ -303,10 +317,8 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
         if (Strings.isNullOrEmpty(releaseMessage)) {
           return null;
         }
-        List<String> keys = STRING_SPLITTER.splitToList(releaseMessage);
-        //message should be appId+cluster+namespace
-        if (keys.size() != 3) {
-          logger.error("message format invalid - {}", releaseMessage);
+        List<String> keys = ReleaseMessageKeyGenerator.messageToList(releaseMessage);
+        if (CollectionUtils.isEmpty(keys)) {
           return null;
         }
         return keys.get(2);

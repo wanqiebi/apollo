@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.openapi.util;
 
 import java.lang.reflect.Type;
@@ -35,7 +51,7 @@ import com.google.gson.Gson;
 public class OpenApiBeanUtils {
 
   private static final Gson GSON = new Gson();
-  private static Type type = new TypeToken<Map<String, String>>() {}.getType();
+  private static final Type TYPE = new TypeToken<Map<String, String>>() {}.getType();
 
   public static OpenItemDTO transformFromItemDTO(ItemDTO item) {
     Preconditions.checkArgument(item != null);
@@ -62,7 +78,7 @@ public class OpenApiBeanUtils {
 
     OpenReleaseDTO openReleaseDTO = BeanUtils.transform(OpenReleaseDTO.class, release);
 
-    Map<String, String> configs = GSON.fromJson(release.getConfigurations(), type);
+    Map<String, String> configs = GSON.fromJson(release.getConfigurations(), TYPE);
 
     openReleaseDTO.setConfigurations(configs);
     return openReleaseDTO;
@@ -84,7 +100,7 @@ public class OpenApiBeanUtils {
     List<ItemBO> itemBOs = namespaceBO.getItems();
     if (!CollectionUtils.isEmpty(itemBOs)) {
       items.addAll(itemBOs.stream().map(itemBO -> transformFromItemDTO(itemBO.getItem()))
-          .collect(Collectors.toList()));
+              .collect(Collectors.toList()));
     }
     openNamespaceDTO.setItems(items);
     return openNamespaceDTO;
@@ -97,11 +113,9 @@ public class OpenApiBeanUtils {
       return Collections.emptyList();
     }
 
-    List<OpenNamespaceDTO> openNamespaceDTOs =
-        namespaceBOs.stream().map(OpenApiBeanUtils::transformFromNamespaceBO)
+    return namespaceBOs.stream()
+            .map(OpenApiBeanUtils::transformFromNamespaceBO)
             .collect(Collectors.toCollection(LinkedList::new));
-
-    return openNamespaceDTOs;
   }
 
   public static OpenNamespaceLockDTO transformFromNamespaceLockDTO(String namespaceName,
@@ -144,7 +158,8 @@ public class OpenApiBeanUtils {
     openGrayReleaseRuleItemDTOSet.forEach(openGrayReleaseRuleItemDTO -> {
       String clientAppId = openGrayReleaseRuleItemDTO.getClientAppId();
       Set<String> clientIpList = openGrayReleaseRuleItemDTO.getClientIpList();
-      GrayReleaseRuleItemDTO ruleItem = new GrayReleaseRuleItemDTO(clientAppId, clientIpList);
+      Set<String> clientLabelList = openGrayReleaseRuleItemDTO.getClientLabelList();
+      GrayReleaseRuleItemDTO ruleItem = new GrayReleaseRuleItemDTO(clientAppId, clientIpList, clientLabelList);
       grayReleaseRuleDTO.addRuleItem(ruleItem);
     });
 

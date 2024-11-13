@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 /** navbar */
 directive_module.directive('apollonav',
     function ($compile, $window, $translate, toastr, AppUtil, AppService, EnvService,
@@ -40,7 +56,9 @@ directive_module.directive('apollonav',
                                     data.content.forEach(function (app) {
                                         result.push({
                                             id: app.appId,
-                                            text: app.appId + ' / ' + app.name
+                                            text: app.appId + ' / ' + app.name,
+                                            orgId: app.orgId,
+                                            orgName: app.orgName
                                         })
                                     });
                                     return {
@@ -65,22 +83,46 @@ directive_module.directive('apollonav',
                     $('#app-search-list').on('select2:select', function () {
                         var selected = $('#app-search-list').select2('data');
                         if (selected && selected.length) {
-                            jumpToConfigPage(selected[0].id)
+                            jumpToConfigPage(selected[0].id, selected[0].name, selected[0].orgName, selected[0].orgId)
                         }
                     });
                 });
 
-                function jumpToConfigPage(selectedAppId) {
+                function jumpToConfigPage(selectedAppId, name, type, namespaceInfo) {
                     if ($window.location.href.indexOf("config.html") > -1) {
-                        $window.location.hash = "appid=" + selectedAppId;
+                        if (type && type.startsWith('SearchByItem')) {
+                            var namespaceInfos = namespaceInfo.split('+');
+                            var env = namespaceInfos[0];
+                            var cluster = namespaceInfos[1];
+                            var namespaceName = namespaceInfos[2];
+                            var searchKey = type.split("+")[1];
+                            $window.location.hash =
+                                "appid=" + selectedAppId + "&env=" + env + "&cluster=" + cluster + "&namespace="
+                                + namespaceName + "&item=" + searchKey;
+                        } else {
+                            $window.location.hash = "appid=" + selectedAppId;
+                        }
+
                         $window.location.reload();
                     } else {
-                        $window.location.href = AppUtil.prefixPath() + '/config.html?#appid=' + selectedAppId;
+                        if (type && type.startsWith('SearchByItem')) {
+                            var namespaceInfos = namespaceInfo.split('+');
+                            var env = namespaceInfos[0];
+                            var cluster = namespaceInfos[1];
+                            var namespaceName = namespaceInfos[2];
+                            var searchKey = type.split("+")[1];
+                            $window.location.href =
+                                AppUtil.prefixPath() + '/config.html?#appid=' + selectedAppId + "&env=" + env
+                                + "&cluster=" + cluster + "&namespace=" + namespaceName + "&item=" + searchKey;
+                        } else {
+                            $window.location.href =  AppUtil.prefixPath() + '/config.html?#appid=' + selectedAppId;
+                        }
                     }
                 };
 
                 UserService.load_user().then(function (result) {
                     scope.userName = result.userId;
+                    scope.userDisplayName = result.name;
                 }, function (result) {
 
                 });
@@ -278,7 +320,7 @@ directive_module.directive('apollouserselector', function ($compile, $window,App
                         data.forEach(function (user) {
                             users.push({
                                 id: user.userId,
-                                text: user.userId + " | " + user.name
+                                text: user.userId + " | " + user.name + " | " + user.email
                             })
                         });
                         return {
@@ -329,7 +371,7 @@ directive_module.directive('apollomultipleuserselector', function ($compile, $wi
                         data.forEach(function (user) {
                             users.push({
                                 id: user.userId,
-                                text: user.userId + " | " + user.name
+                                text: user.userId + " | " + user.name + " | " + user.email
                             })
                         });
                         return {

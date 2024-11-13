@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 var prefixPath = window.localStorage.getItem("prefixPath") || "";
 
 /**utils*/
@@ -47,7 +63,9 @@ var diff_item_module = angular.module('diff_item', ['app.service', 'apollo.direc
 //namespace
 var namespace_module = angular.module('namespace', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar', 'valdr']);
 //server config
-var server_config_module = angular.module('server_config', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
+var server_config_manage_module = angular.module('server_config_manage', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
+// Value的全局检索
+var global_search_value_module = angular.module('global_search_value', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar', 'ngSanitize']);
 //setting
 var setting_module = angular.module('setting', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar', 'valdr']);
 //role
@@ -70,3 +88,7 @@ var system_info_module = angular.module('system_info', ['app.service', 'apollo.d
 var access_key_module = angular.module('access_key', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
 //config export
 var config_export_module = angular.module('config_export', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
+//audit log menu
+var audit_log_menu_module = angular.module('audit_log', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);
+//audit log trace detail
+var audit_log_trace_detail_module = angular.module('audit_log_trace_detail', ['app.service', 'apollo.directive', 'app.util', 'toastr', 'angular-loading-bar']);

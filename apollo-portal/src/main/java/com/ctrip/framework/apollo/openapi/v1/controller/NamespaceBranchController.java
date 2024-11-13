@@ -1,8 +1,20 @@
-package com.ctrip.framework.apollo.openapi.v1.controller;
-
-/**
- * Created by qianjie on 8/10/17.
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
  */
+package com.ctrip.framework.apollo.openapi.v1.controller;
 
 import com.ctrip.framework.apollo.common.dto.GrayReleaseRuleDTO;
 import com.ctrip.framework.apollo.common.dto.NamespaceDTO;
@@ -76,7 +88,7 @@ public class NamespaceBranchController {
         RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(operator),"operator can not be empty");
 
         if (userService.findByUserId(operator) == null) {
-            throw new BadRequestException("operator " + operator + " not exists");
+            throw BadRequestException.userNotExists(operator);
         }
 
         NamespaceDTO namespaceDTO = namespaceBranchService.createBranch(appId, Env.valueOf(env.toUpperCase()), clusterName, namespaceName, operator);
@@ -98,7 +110,7 @@ public class NamespaceBranchController {
         RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(operator),"operator can not be empty");
 
         if (userService.findByUserId(operator) == null) {
-            throw new BadRequestException("operator " + operator + " not exists");
+            throw BadRequestException.userNotExists(operator);
         }
 
         boolean canDelete = consumerPermissionValidator.hasReleaseNamespacePermission(request, appId, namespaceName, env) ||
@@ -137,7 +149,7 @@ public class NamespaceBranchController {
         RequestPrecondition.checkArguments(!StringUtils.isContainEmpty(operator),"operator can not be empty");
 
         if (userService.findByUserId(operator) == null) {
-            throw new BadRequestException("operator " + operator + " not exists");
+            throw BadRequestException.userNotExists(operator);
         }
 
         rules.setAppId(appId);

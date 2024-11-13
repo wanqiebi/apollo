@@ -1,5 +1,22 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.biz.service;
 
+import com.ctrip.framework.apollo.biz.config.BizConfig;
 import com.ctrip.framework.apollo.biz.entity.Audit;
 import com.ctrip.framework.apollo.biz.entity.Cluster;
 import com.ctrip.framework.apollo.biz.entity.Item;
@@ -19,6 +36,8 @@ import com.ctrip.framework.apollo.core.ConfigConsts;
 import com.google.common.collect.Maps;
 import com.google.gson.Gson;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +69,7 @@ public class NamespaceService {
   private final NamespaceLockService namespaceLockService;
   private final InstanceService instanceService;
   private final MessageSender messageSender;
+  private final BizConfig bizConfig;
 
   public NamespaceService(
       final ReleaseHistoryService releaseHistoryService,
@@ -63,7 +83,8 @@ public class NamespaceService {
       final @Lazy ClusterService clusterService,
       final @Lazy NamespaceBranchService namespaceBranchService,
       final NamespaceLockService namespaceLockService,
-      final InstanceService instanceService) {
+      final InstanceService instanceService,
+      final BizConfig bizConfig) {
     this.releaseHistoryService = releaseHistoryService;
     this.namespaceRepository = namespaceRepository;
     this.auditService = auditService;
@@ -76,6 +97,7 @@ public class NamespaceService {
     this.namespaceBranchService = namespaceBranchService;
     this.namespaceLockService = namespaceLockService;
     this.instanceService = instanceService;
+    this.bizConfig = bizConfig;
   }
 
 
@@ -88,10 +110,25 @@ public class NamespaceService {
                                                                          namespaceName);
   }
 
+  /**
+   * the returned content's size is not fixed. so please carefully used.
+   */
+  public Page<Namespace> findByItem(String itemKey, Pageable pageable) {
+    Page<Item> items = itemService.findItemsByKey(itemKey, pageable);
+
+    if (!items.hasContent()) {
+      return Page.empty();
+    }
+
+    Set<Long> namespaceIds = BeanUtils.toPropertySet("namespaceId", items.getContent());
+
+    return new PageImpl<>(namespaceRepository.findByIdIn(namespaceIds));
+  }
+
   public Namespace findPublicNamespaceForAssociatedNamespace(String clusterName, String namespaceName) {
     AppNamespace appNamespace = appNamespaceService.findPublicNamespaceByName(namespaceName);
     if (appNamespace == null) {
-      throw new BadRequestException("namespace not exist");
+      throw BadRequestException.namespaceNotExists("", clusterName, namespaceName);
     }
 
     String appId = appNamespace.getAppId();
@@ -316,6 +353,14 @@ public class NamespaceService {
     if (!isNamespaceUnique(entity.getAppId(), entity.getClusterName(), entity.getNamespaceName())) {
       throw new ServiceException("namespace not unique");
     }
+
+    if (bizConfig.isNamespaceNumLimitEnabled() && !bizConfig.namespaceNumLimitWhite().contains(entity.getAppId())) {
+      int nowCount = namespaceRepository.countByAppIdAndClusterName(entity.getAppId(), entity.getClusterName());
+      if (nowCount >= bizConfig.namespaceNumLimit()) {
+        throw new ServiceException("namespace[appId = " + entity.getAppId() + ", cluster= " + entity.getClusterName() + "] nowCount= " + nowCount + ", maxCount =" + bizConfig.namespaceNumLimit());
+      }
+    }
+
     entity.setId(0);//protection
     Namespace namespace = namespaceRepository.save(entity);
 
@@ -359,7 +404,7 @@ public class NamespaceService {
   public Map<String, Boolean> namespacePublishInfo(String appId) {
     List<Cluster> clusters = clusterService.findParentClusters(appId);
     if (CollectionUtils.isEmpty(clusters)) {
-      throw new BadRequestException("app not exist");
+      throw BadRequestException.appNotExists(appId);
     }
 
     Map<String, Boolean> clusterHasNotPublishedItems = Maps.newHashMap();

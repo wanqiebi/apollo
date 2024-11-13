@@ -1,14 +1,30 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.portal.service;
 
 
 import com.ctrip.framework.apollo.common.constants.GsonType;
-import com.ctrip.framework.apollo.common.dto.ItemChangeSets;
-import com.ctrip.framework.apollo.common.dto.ItemDTO;
-import com.ctrip.framework.apollo.common.dto.NamespaceDTO;
-import com.ctrip.framework.apollo.common.dto.ReleaseDTO;
+import com.ctrip.framework.apollo.common.dto.*;
 import com.ctrip.framework.apollo.common.exception.BadRequestException;
+import com.ctrip.framework.apollo.common.exception.NotFoundException;
 import com.ctrip.framework.apollo.common.utils.BeanUtils;
 import com.ctrip.framework.apollo.core.enums.ConfigFileFormat;
+import com.ctrip.framework.apollo.openapi.utils.UrlUtils;
+import com.ctrip.framework.apollo.openapi.dto.OpenItemDTO;
 import com.ctrip.framework.apollo.portal.api.AdminServiceAPI.ItemAPI;
 import com.ctrip.framework.apollo.portal.api.AdminServiceAPI.NamespaceAPI;
 import com.ctrip.framework.apollo.portal.api.AdminServiceAPI.ReleaseAPI;
@@ -34,6 +50,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class ItemService {
@@ -75,10 +92,14 @@ public class ItemService {
 
     NamespaceDTO namespace = namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName);
     if (namespace == null) {
-      throw new BadRequestException(
-          "namespace:" + namespaceName + " not exist in env:" + env + ", cluster:" + clusterName);
+      throw BadRequestException.namespaceNotExists(appId, clusterName, namespaceName);
     }
     long namespaceId = namespace.getId();
+
+    // In case someone constructs an attack scenario
+    if (model.getNamespaceId() != namespaceId) {
+      throw BadRequestException.namespaceNotExists();
+    }
 
     String configText = model.getConfigText();
 
@@ -91,7 +112,12 @@ public class ItemService {
       return;
     }
 
-    changeSets.setDataChangeLastModifiedBy(userInfoHolder.getUser().getUserId());
+    String operator = model.getOperator();
+    if (StringUtils.isBlank(operator)) {
+      operator = userInfoHolder.getUser().getUserId();
+    }
+    changeSets.setDataChangeLastModifiedBy(operator);
+
     updateItems(appId, env, clusterName, namespaceName, changeSets);
 
     Tracer.logEvent(TracerEventType.MODIFY_NAMESPACE_BY_TEXT,
@@ -107,14 +133,23 @@ public class ItemService {
   public ItemDTO createItem(String appId, Env env, String clusterName, String namespaceName, ItemDTO item) {
     NamespaceDTO namespace = namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName);
     if (namespace == null) {
-      throw new BadRequestException(
-          "namespace:" + namespaceName + " not exist in env:" + env + ", cluster:" + clusterName);
+      throw BadRequestException.namespaceNotExists(appId, clusterName, namespaceName);
     }
     item.setNamespaceId(namespace.getId());
 
     ItemDTO itemDTO = itemAPI.createItem(appId, env, clusterName, namespaceName, item);
     Tracer.logEvent(TracerEventType.MODIFY_NAMESPACE, String.format("%s+%s+%s+%s", appId, env, clusterName, namespaceName));
     return itemDTO;
+  }
+
+  public ItemDTO createCommentItem(String appId, Env env, String clusterName, String namespaceName, ItemDTO item) {
+    NamespaceDTO namespace = namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName);
+    if (namespace == null) {
+      throw BadRequestException.namespaceNotExists(appId, clusterName, namespaceName);
+    }
+    item.setNamespaceId(namespace.getId());
+
+    return itemAPI.createCommentItem(appId, env, clusterName, namespaceName, item);
   }
 
   public void updateItem(String appId, Env env, String clusterName, String namespaceName, ItemDTO item) {
@@ -134,13 +169,16 @@ public class ItemService {
   }
 
   public ItemDTO loadItem(Env env, String appId, String clusterName, String namespaceName, String key) {
+    if (UrlUtils.hasIllegalChar(key)) {
+      return itemAPI.loadItemByEncodeKey(env, appId, clusterName, namespaceName, key);
+    }
     return itemAPI.loadItem(env, appId, clusterName, namespaceName, key);
   }
 
   public ItemDTO loadItemById(Env env, long itemId) {
     ItemDTO item = itemAPI.loadItemById(env, itemId);
     if (item == null) {
-      throw new BadRequestException("item not found for itemId " + itemId);
+      throw NotFoundException.itemNotFound(itemId);
     }
     return item;
   }
@@ -168,8 +206,7 @@ public class ItemService {
 
     NamespaceDTO namespace = namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName);
     if (namespace == null) {
-      throw new BadRequestException(
-          "namespace:" + namespaceName + " not exist in env:" + env + ", cluster:" + clusterName);
+      throw BadRequestException.namespaceNotExists(appId, clusterName, namespaceName);
     }
     long namespaceId = namespace.getId();
 
@@ -180,12 +217,13 @@ public class ItemService {
     }
     List<ItemDTO> baseItems = itemAPI.findItems(appId, env, clusterName, namespaceName);
     Map<String, ItemDTO> oldKeyMapItem = BeanUtils.mapByKey("key", baseItems);
-    Map<String, ItemDTO> deletedItemDTOs = new HashMap<>();
+    //remove comment and blank item map.
+    oldKeyMapItem.remove("");
 
     //deleted items for comment
-    findDeletedItems(appId, env, clusterName, namespaceName).forEach(item -> {
-      deletedItemDTOs.put(item.getKey(),item);
-    });
+    Map<String, ItemDTO> deletedItemDTOs = findDeletedItems(appId, env, clusterName, namespaceName).stream()
+            .filter(itemDTO -> !StringUtils.isEmpty(itemDTO.getKey()))
+            .collect(Collectors.toMap(itemDTO -> itemDTO.getKey(), v -> v, (v1, v2) -> v2));
 
     ItemChangeSets changeSets = new ItemChangeSets();
     AtomicInteger lineNum = new AtomicInteger(1);
@@ -193,23 +231,22 @@ public class ItemService {
       ItemDTO oldItem = oldKeyMapItem.get(key);
       if (oldItem == null) {
         ItemDTO deletedItemDto = deletedItemDTOs.computeIfAbsent(key, k -> new ItemDTO());
-        changeSets.addCreateItem(buildNormalItem(0L, namespaceId,key,value,deletedItemDto.getComment(),lineNum.get()));
-      } else if (!oldItem.getValue().equals(value) || lineNum.get() != oldItem
-          .getLineNum()) {
-        changeSets.addUpdateItem(buildNormalItem(oldItem.getId(), namespaceId, key,
-            value, oldItem.getComment(), lineNum.get()));
+        int newLineNum = 0 == deletedItemDto.getLineNum() ? lineNum.get() : deletedItemDto.getLineNum();
+        changeSets.addCreateItem(buildNormalItem(0L, namespaceId, key, value, deletedItemDto.getComment(), newLineNum));
+      } else if (!StringUtils.equals(oldItem.getValue(), value) || lineNum.get() != oldItem.getLineNum()) {
+        changeSets.addUpdateItem(buildNormalItem(oldItem.getId(), namespaceId, key, value, oldItem.getComment(), oldItem.getLineNum()));
       }
       oldKeyMapItem.remove(key);
       lineNum.set(lineNum.get() + 1);
     });
-    oldKeyMapItem.forEach((key, value) -> changeSets.addDeleteItem(oldKeyMapItem.get(key)));
+    oldKeyMapItem.forEach((key, value) -> changeSets.addDeleteItem(value));
     changeSets.setDataChangeLastModifiedBy(userInfoHolder.getUser().getUserId());
 
     updateItems(appId, env, clusterName, namespaceName, changeSets);
 
-    Tracer.logEvent(TracerEventType.MODIFY_NAMESPACE_BY_TEXT,
-        String.format("%s+%s+%s+%s", appId, env, clusterName, namespaceName));
-    Tracer.logEvent(TracerEventType.MODIFY_NAMESPACE, String.format("%s+%s+%s+%s", appId, env, clusterName, namespaceName));
+    String formatStr = String.format("%s+%s+%s+%s", appId, env, clusterName, namespaceName);
+    Tracer.logEvent(TracerEventType.MODIFY_NAMESPACE_BY_TEXT, formatStr);
+    Tracer.logEvent(TracerEventType.MODIFY_NAMESPACE, formatStr);
   }
 
   public List<ItemDiffs> compare(List<NamespaceIdentifier> comparedNamespaces, List<ItemDTO> sourceItems) {
@@ -231,19 +268,22 @@ public class ItemService {
     return result;
   }
 
+  public PageDTO<OpenItemDTO> findItemsByNamespace(String appId, Env env, String clusterName,
+                                                   String namespaceName, int page, int size) {
+    return itemAPI.findItemsByNamespace(appId, env, clusterName, namespaceName, page, size);
+  }
+
   private long getNamespaceId(NamespaceIdentifier namespaceIdentifier) {
     String appId = namespaceIdentifier.getAppId();
     String clusterName = namespaceIdentifier.getClusterName();
     String namespaceName = namespaceIdentifier.getNamespaceName();
     Env env = namespaceIdentifier.getEnv();
-    NamespaceDTO namespaceDTO = null;
+    NamespaceDTO namespaceDTO;
     try {
       namespaceDTO = namespaceAPI.loadNamespace(appId, env, clusterName, namespaceName);
     } catch (HttpClientErrorException e) {
       if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
-        throw new BadRequestException(String.format(
-            "namespace not exist. appId:%s, env:%s, clusterName:%s, namespaceName:%s", appId, env, clusterName,
-            namespaceName));
+        throw BadRequestException.namespaceNotExists(appId, clusterName, namespaceName);
       }
       throw e;
     }

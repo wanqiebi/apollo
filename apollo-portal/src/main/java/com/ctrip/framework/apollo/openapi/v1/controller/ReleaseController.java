@@ -1,9 +1,26 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.openapi.v1.controller;
 
 import com.ctrip.framework.apollo.common.dto.ReleaseDTO;
 import com.ctrip.framework.apollo.common.exception.BadRequestException;
 import com.ctrip.framework.apollo.common.utils.BeanUtils;
 import com.ctrip.framework.apollo.common.utils.RequestPrecondition;
+import com.ctrip.framework.apollo.openapi.api.ReleaseOpenApiService;
 import com.ctrip.framework.apollo.portal.environment.Env;
 import com.ctrip.framework.apollo.core.utils.StringUtils;
 import com.ctrip.framework.apollo.openapi.auth.ConsumerPermissionValidator;
@@ -36,16 +53,19 @@ public class ReleaseController {
   private final UserService userService;
   private final NamespaceBranchService namespaceBranchService;
   private final ConsumerPermissionValidator consumerPermissionValidator;
+  private final ReleaseOpenApiService releaseOpenApiService;
 
   public ReleaseController(
       final ReleaseService releaseService,
       final UserService userService,
       final NamespaceBranchService namespaceBranchService,
-      final ConsumerPermissionValidator consumerPermissionValidator) {
+      final ConsumerPermissionValidator consumerPermissionValidator,
+      ReleaseOpenApiService releaseOpenApiService) {
     this.releaseService = releaseService;
     this.userService = userService;
     this.namespaceBranchService = namespaceBranchService;
     this.consumerPermissionValidator = consumerPermissionValidator;
+    this.releaseOpenApiService = releaseOpenApiService;
   }
 
   @PreAuthorize(value = "@consumerPermissionValidator.hasReleaseNamespacePermission(#request, #appId, #namespaceName, #env)")
@@ -60,30 +80,17 @@ public class ReleaseController {
         "Params(releaseTitle and releasedBy) can not be empty");
 
     if (userService.findByUserId(model.getReleasedBy()) == null) {
-      throw new BadRequestException("user(releaseBy) not exists");
+      throw BadRequestException.userNotExists(model.getReleasedBy());
     }
 
-    NamespaceReleaseModel releaseModel = BeanUtils.transform(NamespaceReleaseModel.class, model);
-
-    releaseModel.setAppId(appId);
-    releaseModel.setEnv(Env.valueOf(env).toString());
-    releaseModel.setClusterName(clusterName);
-    releaseModel.setNamespaceName(namespaceName);
-
-    return OpenApiBeanUtils.transformFromReleaseDTO(releaseService.publish(releaseModel));
+    return this.releaseOpenApiService.publishNamespace(appId, env, clusterName, namespaceName, model);
   }
 
   @GetMapping(value = "/apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}/releases/latest")
   public OpenReleaseDTO loadLatestActiveRelease(@PathVariable String appId, @PathVariable String env,
                                                 @PathVariable String clusterName, @PathVariable
                                                     String namespaceName) {
-    ReleaseDTO releaseDTO = releaseService.loadLatestRelease(appId, Env.valueOf
-        (env), clusterName, namespaceName);
-    if (releaseDTO == null) {
-      return null;
-    }
-
-    return OpenApiBeanUtils.transformFromReleaseDTO(releaseDTO);
+    return this.releaseOpenApiService.getLatestActiveRelease(appId, env, clusterName, namespaceName);
   }
 
     @PreAuthorize(value = "@consumerPermissionValidator.hasReleaseNamespacePermission(#request, #appId, #namespaceName, #env)")
@@ -97,7 +104,7 @@ public class ReleaseController {
                 "Params(releaseTitle and releasedBy) can not be empty");
 
         if (userService.findByUserId(model.getReleasedBy()) == null) {
-            throw new BadRequestException("user(releaseBy) not exists");
+            throw BadRequestException.userNotExists(model.getReleasedBy());
         }
 
         ReleaseDTO mergedRelease = namespaceBranchService.merge(appId, Env.valueOf(env.toUpperCase()), clusterName, namespaceName, branchName,
@@ -119,7 +126,7 @@ public class ReleaseController {
                 "Params(releaseTitle and releasedBy) can not be empty");
 
         if (userService.findByUserId(model.getReleasedBy()) == null) {
-            throw new BadRequestException("user(releaseBy) not exists");
+            throw BadRequestException.userNotExists(model.getReleasedBy());
         }
 
         NamespaceReleaseModel releaseModel = BeanUtils.transform(NamespaceReleaseModel.class, model);
@@ -146,7 +153,7 @@ public class ReleaseController {
                 "Params(grayDelKeys) can not be null");
 
         if (userService.findByUserId(model.getReleasedBy()) == null) {
-            throw new BadRequestException("user(releaseBy) not exists");
+            throw BadRequestException.userNotExists(model.getReleasedBy());
         }
 
         NamespaceGrayDelReleaseModel releaseModel = BeanUtils.transform(NamespaceGrayDelReleaseModel.class, model);
@@ -165,7 +172,7 @@ public class ReleaseController {
         "Param operator can not be empty");
 
     if (userService.findByUserId(operator) == null) {
-      throw new BadRequestException("user(operator) not exists");
+      throw BadRequestException.userNotExists(operator);
     }
 
     ReleaseDTO release = releaseService.findReleaseById(Env.valueOf(env), releaseId);
@@ -178,8 +185,7 @@ public class ReleaseController {
       throw new AccessDeniedException("Forbidden operation. you don't have release permission");
     }
 
-    releaseService.rollback(Env.valueOf(env), releaseId, operator);
-
+    this.releaseOpenApiService.rollbackRelease(env, releaseId, operator);
   }
 
 }

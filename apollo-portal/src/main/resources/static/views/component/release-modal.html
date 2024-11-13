@@ -1,5 +1,21 @@
 <form id="releaseModal" class="modal fade form-horizontal" name="releaseForm" valdr-type="Release"
     ng-submit="release()">
+    <!--
+      ~ Copyright 2024 Apollo Authors
+      ~
+      ~ Licensed under the Apache License, Version 2.0 (the "License");
+      ~ you may not use this file except in compliance with the License.
+      ~ You may obtain a copy of the License at
+      ~
+      ~ http://www.apache.org/licenses/LICENSE-2.0
+      ~
+      ~ Unless required by applicable law or agreed to in writing, software
+      ~ distributed under the License is distributed on an "AS IS" BASIS,
+      ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      ~ See the License for the specific language governing permissions and
+      ~ limitations under the License.
+      ~
+    -->
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header panel-primary">
@@ -22,13 +38,17 @@
 
             <div class="release modal-body">
 
-                <div class="form-group">
+                <div class="form-group pre-scrollable">
                     <div class="col-sm-2 control-label" ng-if="!toReleaseNamespace.isPropertiesFormat">
-                        <div class="row">
-                            <div class="btn-group btn-group-xs" style="padding-right: 10px" role="group">
+                        <div class="btn-group-vertical">
+                            <div class="btn-group btn-group-xs" role="group">
+                                <button type="button" class="btn btn-default" ng-if="toReleaseNamespace.isBranch"
+                                        ng-class="{active:releaseChangeViewType=='compareWithMasterValue'}"
+                                        ng-click="switchReleaseChangeViewType('compareWithMasterValue')">{{'Component.Publish.CompareWithMasterValue' | translate }}
+                                </button>
                                 <button type="button" class="btn btn-default"
-                                    ng-class="{active:releaseChangeViewType=='change'}"
-                                    ng-click="switchReleaseChangeViewType('change')">{{'Component.Publish.ToSeeChange' | translate }}
+                                    ng-class="{active:releaseChangeViewType=='compareWithPublishedValue'}"
+                                    ng-click="switchReleaseChangeViewType('compareWithPublishedValue')">{{'Component.Publish.CompareWithPublishedValue' | translate }}
                                 </button>
                                 <button type="button" class="btn btn-default"
                                     ng-class="{active:releaseChangeViewType=='release'}"
@@ -200,9 +220,14 @@
                         </table>
 
                         <!--file format -->
+                        <div ng-repeat="config in toReleaseNamespace.branchItems" ng-if="!toReleaseNamespace.isPropertiesFormat&&toReleaseNamespace.isBranch"
+                             ng-show="releaseChangeViewType=='compareWithMasterValue'">
+                            <apollodiff old-str="config.masterReleaseValue" new-str="config.newValue" apollo-id="'releaseStrDiffWithMasterValue'">
+                            </apollodiff>
+                        </div>
                         <div ng-repeat="item in toReleaseNamespace.items" ng-if="!toReleaseNamespace.isPropertiesFormat"
-                            ng-show="releaseChangeViewType=='change'">
-                            <apollodiff old-str="item.oldValue" new-str="item.newValue" apollo-id="'releaseStrDiff'">
+                            ng-show="releaseChangeViewType=='compareWithPublishedValue'">
+                            <apollodiff old-str="item.oldValue" new-str="item.newValue" apollo-id="'releaseStrDiffWithPublishedValue'">
                             </apollodiff>
                         </div>
                         <div ng-repeat="item in toReleaseNamespace.items" ng-if="!toReleaseNamespace.isPropertiesFormat"

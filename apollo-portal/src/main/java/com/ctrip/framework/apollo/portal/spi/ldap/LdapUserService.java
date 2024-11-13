@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.portal.spi.ldap;
 
 import static java.util.stream.Collectors.collectingAndThen;
@@ -6,8 +22,6 @@ import static org.springframework.ldap.query.LdapQueryBuilder.query;
 
 import com.ctrip.framework.apollo.portal.entity.bo.UserInfo;
 import com.ctrip.framework.apollo.portal.spi.UserService;
-import com.ctrip.framework.apollo.portal.spi.configuration.LdapExtendProperties;
-import com.ctrip.framework.apollo.portal.spi.configuration.LdapProperties;
 import com.google.common.base.Strings;
 import com.google.common.collect.Sets;
 import java.util.ArrayList;
@@ -18,8 +32,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import javax.naming.directory.Attribute;
 import javax.naming.ldap.LdapName;
-import org.apache.commons.lang.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.ldap.core.AttributesMapper;
@@ -43,11 +56,7 @@ import org.springframework.util.CollectionUtils;
  */
 public class LdapUserService implements UserService {
 
-  @Autowired
-  private LdapProperties ldapProperties;
-
-  @Autowired
-  private LdapExtendProperties ldapExtendProperties;
+  private final LdapTemplate ldapTemplate;
 
   /**
    * ldap search base
@@ -109,17 +118,17 @@ public class LdapUserService implements UserService {
   @Value("${ldap.group.groupMembership:}")
   private String groupMembershipAttrName;
 
-
-  @Autowired
-  private LdapTemplate ldapTemplate;
-
   private static final String MEMBER_OF_ATTR_NAME = "memberOf";
   private static final String MEMBER_UID_ATTR_NAME = "memberUid";
+
+  public LdapUserService(final LdapTemplate ldapTemplate) {
+    this.ldapTemplate = ldapTemplate;
+  }
 
   /**
    * 用户信息Mapper
    */
-  private ContextMapper<UserInfo> ldapUserInfoMapper = (ctx) -> {
+  private final ContextMapper<UserInfo> ldapUserInfoMapper = (ctx) -> {
     DirContextAdapter contextAdapter = (DirContextAdapter) ctx;
     UserInfo userInfo = new UserInfo();
     userInfo.setUserId(contextAdapter.getStringAttribute(loginIdAttrName));
@@ -253,7 +262,7 @@ public class LdapUserService implements UserService {
   }
 
   @Override
-  public List<UserInfo> searchUsers(String keyword, int offset, int limit) {
+  public List<UserInfo> searchUsers(String keyword, int offset, int limit, boolean includeInactiveUsers) {
     List<UserInfo> users = new ArrayList<>();
     if (StringUtils.isNotBlank(groupSearch)) {
       List<UserInfo> userListByGroup = searchUserInfoByGroup(groupBase, groupSearch, keyword,
@@ -301,9 +310,7 @@ public class LdapUserService implements UserService {
       return Collections.emptyList();
     }
     if (StringUtils.isNotBlank(groupSearch)) {
-      List<UserInfo> userListByGroup = searchUserInfoByGroup(groupBase, groupSearch, null,
-          userIds);
-      return userListByGroup;
+      return searchUserInfoByGroup(groupBase, groupSearch, null, userIds);
     }
     ContainerCriteria criteria = query().where(loginIdAttrName).is(userIds.get(0));
     userIds.stream().skip(1).forEach(userId -> criteria.or(loginIdAttrName).is(userId));

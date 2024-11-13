@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 directive_module.directive('releasemodal', releaseModalDirective);
 
 function releaseModalDirective($translate, toastr, AppUtil, EventManager, ReleaseService, NamespaceBranchService) {
@@ -17,7 +33,7 @@ function releaseModalDirective($translate, toastr, AppUtil, EventManager, Releas
             scope.release = release;
 
             scope.releaseBtnDisabled = false;
-            scope.releaseChangeViewType = 'change';
+            scope.releaseChangeViewType = 'compareWithPublishedValue';
             scope.releaseComment = '';
             scope.isEmergencyPublish = false;
 
@@ -95,13 +111,16 @@ function releaseModalDirective($translate, toastr, AppUtil, EventManager, Releas
                             scope.releaseBtnDisabled = false;
 
                             //refresh item status
-                            scope.toReleaseNamespace.branchItems.forEach(function (item, index) {
+                            for (let index = 0; index < scope.toReleaseNamespace.branchItems.length; index++) {
+                                const item = scope.toReleaseNamespace.branchItems[index];
                                 if (item.isDeleted) {
                                     scope.toReleaseNamespace.branchItems.splice(index, 1);
+                                    index--;
                                 } else {
                                     item.isModified = false;
                                 }
-                            });
+                            }
+
                             //reset namespace status
                             scope.toReleaseNamespace.itemModifiedCnt = 0;
                             scope.toReleaseNamespace.lockOwner = undefined;

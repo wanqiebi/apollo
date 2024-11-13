@@ -1,8 +1,25 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.configservice.service;
 
 import com.ctrip.framework.apollo.biz.config.BizConfig;
 import com.ctrip.framework.apollo.biz.entity.AccessKey;
 import com.ctrip.framework.apollo.biz.repository.AccessKeyRepository;
+import com.ctrip.framework.apollo.common.constants.AccessKeyMode;
 import com.ctrip.framework.apollo.core.utils.ApolloThreadFactory;
 import com.ctrip.framework.apollo.tracer.Tracer;
 import com.ctrip.framework.apollo.tracer.spi.Transaction;
@@ -21,11 +38,11 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -50,8 +67,8 @@ public class AccessKeyServiceWithCache implements InitializingBean {
   private ListMultimap<String, AccessKey> accessKeyCache;
   private ConcurrentMap<Long, AccessKey> accessKeyIdCache;
 
-  @Autowired
-  public AccessKeyServiceWithCache(AccessKeyRepository accessKeyRepository, BizConfig bizConfig) {
+  public AccessKeyServiceWithCache(final AccessKeyRepository accessKeyRepository,
+      final BizConfig bizConfig) {
     this.accessKeyRepository = accessKeyRepository;
     this.bizConfig = bizConfig;
 
@@ -70,13 +87,21 @@ public class AccessKeyServiceWithCache implements InitializingBean {
   }
 
   public List<String> getAvailableSecrets(String appId) {
+    return getSecrets(appId, key -> key.isEnabled() && key.getMode() == AccessKeyMode.FILTER);
+  }
+
+  public List<String> getObservableSecrets(String appId) {
+    return getSecrets(appId, key -> key.isEnabled() && key.getMode() == AccessKeyMode.OBSERVER);
+  }
+
+  public List<String> getSecrets(String appId, Predicate<AccessKey> filter) {
     List<AccessKey> accessKeys = accessKeyCache.get(appId);
     if (CollectionUtils.isEmpty(accessKeys)) {
       return Collections.emptyList();
     }
 
     return accessKeys.stream()
-        .filter(AccessKey::isEnabled)
+        .filter(filter)
         .map(AccessKey::getSecret)
         .collect(Collectors.toList());
   }

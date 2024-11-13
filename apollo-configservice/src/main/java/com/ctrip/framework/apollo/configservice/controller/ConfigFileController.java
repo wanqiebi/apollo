@@ -1,9 +1,26 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.configservice.controller;
 
 import com.ctrip.framework.apollo.biz.entity.ReleaseMessage;
 import com.ctrip.framework.apollo.biz.grayReleaseRule.GrayReleaseRulesHolder;
 import com.ctrip.framework.apollo.biz.message.ReleaseMessageListener;
 import com.ctrip.framework.apollo.biz.message.Topics;
+import com.ctrip.framework.apollo.common.utils.WebUtils;
 import com.ctrip.framework.apollo.configservice.util.NamespaceUtil;
 import com.ctrip.framework.apollo.configservice.util.WatchKeysUtil;
 import com.ctrip.framework.apollo.core.ConfigConsts;
@@ -11,7 +28,6 @@ import com.ctrip.framework.apollo.core.dto.ApolloConfig;
 import com.ctrip.framework.apollo.core.utils.PropertiesUtil;
 import com.ctrip.framework.apollo.tracer.Tracer;
 import com.google.common.base.Joiner;
-import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -49,8 +65,6 @@ import java.util.concurrent.TimeUnit;
 public class ConfigFileController implements ReleaseMessageListener {
   private static final Logger logger = LoggerFactory.getLogger(ConfigFileController.class);
   private static final Joiner STRING_JOINER = Joiner.on(ConfigConsts.CLUSTER_NAMESPACE_SEPARATOR);
-  private static final Splitter X_FORWARDED_FOR_SPLITTER = Splitter.on(",").omitEmptyStrings()
-      .trimResults();
   private static final long MAX_CACHE_SIZE = 50 * 1024 * 1024; // 50MB
   private static final long EXPIRE_AFTER_WRITE = 30;
   private final HttpHeaders propertiesResponseHeaders;
@@ -109,13 +123,14 @@ public class ConfigFileController implements ReleaseMessageListener {
                                                         @PathVariable String namespace,
                                                         @RequestParam(value = "dataCenter", required = false) String dataCenter,
                                                         @RequestParam(value = "ip", required = false) String clientIp,
+                                                        @RequestParam(value = "label", required = false) String clientLabel,
                                                         HttpServletRequest request,
                                                         HttpServletResponse response)
       throws IOException {
 
     String result =
         queryConfig(ConfigFileOutputFormat.PROPERTIES, appId, clusterName, namespace, dataCenter,
-            clientIp, request, response);
+            clientIp, clientLabel, request, response);
 
     if (result == null) {
       return NOT_FOUND_RESPONSE;
@@ -130,12 +145,13 @@ public class ConfigFileController implements ReleaseMessageListener {
                                                   @PathVariable String namespace,
                                                   @RequestParam(value = "dataCenter", required = false) String dataCenter,
                                                   @RequestParam(value = "ip", required = false) String clientIp,
+                                                  @RequestParam(value = "label", required = false) String clientLabel,
                                                   HttpServletRequest request,
                                                   HttpServletResponse response) throws IOException {
 
     String result =
         queryConfig(ConfigFileOutputFormat.JSON, appId, clusterName, namespace, dataCenter,
-            clientIp, request, response);
+            clientIp, clientLabel, request, response);
 
     if (result == null) {
       return NOT_FOUND_RESPONSE;
@@ -145,7 +161,7 @@ public class ConfigFileController implements ReleaseMessageListener {
   }
 
   String queryConfig(ConfigFileOutputFormat outputFormat, String appId, String clusterName,
-                     String namespace, String dataCenter, String clientIp,
+                     String namespace, String dataCenter, String clientIp, String clientLabel,
                      HttpServletRequest request,
                      HttpServletResponse response) throws IOException {
     //strip out .properties suffix
@@ -154,7 +170,7 @@ public class ConfigFileController implements ReleaseMessageListener {
     namespace = namespaceUtil.normalizeNamespace(appId, namespace);
 
     if (Strings.isNullOrEmpty(clientIp)) {
-      clientIp = tryToGetClientIp(request);
+      clientIp = WebUtils.tryToGetClientIp(request);
     }
 
     //1. check whether this client has gray release rules
@@ -166,7 +182,7 @@ public class ConfigFileController implements ReleaseMessageListener {
     //2. try to load gray release and return
     if (hasGrayReleaseRule) {
       Tracer.logEvent("ConfigFile.Cache.GrayRelease", cacheKey);
-      return loadConfig(outputFormat, appId, clusterName, namespace, dataCenter, clientIp,
+      return loadConfig(outputFormat, appId, clusterName, namespace, dataCenter, clientIp, clientLabel,
           request, response);
     }
 
@@ -176,7 +192,7 @@ public class ConfigFileController implements ReleaseMessageListener {
     //4. if not exists, load from ConfigController
     if (Strings.isNullOrEmpty(result)) {
       Tracer.logEvent("ConfigFile.Cache.Miss", cacheKey);
-      result = loadConfig(outputFormat, appId, clusterName, namespace, dataCenter, clientIp,
+      result = loadConfig(outputFormat, appId, clusterName, namespace, dataCenter, clientIp, clientLabel,
           request, response);
 
       if (result == null) {
@@ -186,7 +202,7 @@ public class ConfigFileController implements ReleaseMessageListener {
       //This step is mainly to avoid cache pollution
       if (grayReleaseRulesHolder.hasGrayReleaseRule(appId, clientIp, namespace)) {
         Tracer.logEvent("ConfigFile.Cache.GrayReleaseConflict", cacheKey);
-        return loadConfig(outputFormat, appId, clusterName, namespace, dataCenter, clientIp,
+        return loadConfig(outputFormat, appId, clusterName, namespace, dataCenter, clientIp, clientLabel,
             request, response);
       }
 
@@ -210,11 +226,11 @@ public class ConfigFileController implements ReleaseMessageListener {
   }
 
   private String loadConfig(ConfigFileOutputFormat outputFormat, String appId, String clusterName,
-                            String namespace, String dataCenter, String clientIp,
+                            String namespace, String dataCenter, String clientIp, String clientLabel,
                             HttpServletRequest request,
                             HttpServletResponse response) throws IOException {
     ApolloConfig apolloConfig = configController.queryConfig(appId, clusterName, namespace,
-        dataCenter, "-1", clientIp, null, request, response);
+        dataCenter, "-1", clientIp, clientLabel, null, request, response);
 
     if (apolloConfig == null || apolloConfig.getConfigurations() == null) {
       return null;
@@ -283,11 +299,4 @@ public class ConfigFileController implements ReleaseMessageListener {
     }
   }
 
-  private String tryToGetClientIp(HttpServletRequest request) {
-    String forwardedFor = request.getHeader("X-FORWARDED-FOR");
-    if (!Strings.isNullOrEmpty(forwardedFor)) {
-      return X_FORWARDED_FOR_SPLITTER.splitToList(forwardedFor).get(0);
-    }
-    return request.getRemoteAddr();
-  }
 }

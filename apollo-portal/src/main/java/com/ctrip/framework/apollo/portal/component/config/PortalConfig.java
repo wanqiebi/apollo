@@ -1,5 +1,20 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.portal.component.config;
-
 
 import com.ctrip.framework.apollo.common.config.RefreshableConfig;
 import com.ctrip.framework.apollo.common.config.RefreshablePropertySource;
@@ -12,21 +27,37 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import java.lang.reflect.Type;
-import java.util.*;
 
 @Component
 public class PortalConfig extends RefreshableConfig {
 
   private static final Logger logger = LoggerFactory.getLogger(PortalConfig.class);
 
+  private static final int DEFAULT_REFRESH_ADMIN_SERVER_ADDRESS_TASK_NORMAL_INTERVAL_IN_SECOND = 5 * 60; //5min
+  private static final int DEFAULT_REFRESH_ADMIN_SERVER_ADDRESS_TASK_OFFLINE_INTERVAL_IN_SECOND = 10; //10s
+
   private static final Gson GSON = new Gson();
   private static final Type ORGANIZATION = new TypeToken<List<Organization>>() {
   }.getType();
+
+  private static final List<String> DEFAULT_USER_PASSWORD_NOT_ALLOW_LIST = Arrays.asList(
+      "111", "222", "333", "444", "555", "666", "777", "888", "999", "000",
+      "001122", "112233", "223344", "334455", "445566", "556677", "667788", "778899", "889900",
+      "009988", "998877", "887766", "776655", "665544", "554433", "443322", "332211", "221100",
+      "0123", "1234", "2345", "3456", "4567", "5678", "6789", "7890",
+      "0987", "9876", "8765", "7654", "6543", "5432", "4321", "3210",
+      "1q2w", "2w3e", "3e4r", "5t6y", "abcd", "qwer", "asdf", "zxcv"
+  );
 
   /**
    * meta servers config in "PortalDB.ServerConfig"
@@ -58,13 +89,15 @@ public class PortalConfig extends RefreshableConfig {
     return envs;
   }
 
+  public int getPerEnvSearchMaxResults() {return getIntProperty("apollo.portal.search.perEnvMaxResults", 200);}
+
   /**
    * @return the relationship between environment and its meta server. empty if meet exception
    */
   public Map<String, String> getMetaServers() {
     final String key = "apollo.portal.meta.servers";
     String jsonContent = getValue(key);
-    if(null == jsonContent) {
+    if (null == jsonContent) {
       return Collections.emptyMap();
     }
 
@@ -141,6 +174,18 @@ public class PortalConfig extends RefreshableConfig {
     return getIntProperty("api.readTimeout", 10000);
   }
 
+  public int connectionTimeToLive() {
+    return getIntProperty("api.connectionTimeToLive", -1);
+  }
+
+  public int connectPoolMaxTotal() {
+    return getIntProperty("api.pool.max.total", 20);
+  }
+
+  public int connectPoolMaxPerRoute() {
+    return getIntProperty("api.pool.max.per.route", 2);
+  }
+
   public List<Organization> organizations() {
 
     String organizations = getValue("organizations");
@@ -151,8 +196,18 @@ public class PortalConfig extends RefreshableConfig {
     return getValue("apollo.portal.address");
   }
 
+  public int refreshAdminServerAddressTaskNormalIntervalSecond() {
+    int interval = getIntProperty("refresh.admin.server.address.task.normal.interval.second", DEFAULT_REFRESH_ADMIN_SERVER_ADDRESS_TASK_NORMAL_INTERVAL_IN_SECOND);
+    return checkInt(interval, 5, Integer.MAX_VALUE, DEFAULT_REFRESH_ADMIN_SERVER_ADDRESS_TASK_NORMAL_INTERVAL_IN_SECOND);
+  }
+
+  public int refreshAdminServerAddressTaskOfflineIntervalSecond() {
+    int interval = getIntProperty("refresh.admin.server.address.task.offline.interval.second", DEFAULT_REFRESH_ADMIN_SERVER_ADDRESS_TASK_OFFLINE_INTERVAL_IN_SECOND);
+    return checkInt(interval, 5, Integer.MAX_VALUE, DEFAULT_REFRESH_ADMIN_SERVER_ADDRESS_TASK_OFFLINE_INTERVAL_IN_SECOND);
+  }
+
   public boolean isEmergencyPublishAllowed(Env env) {
-    String targetEnv = env.name();
+    String targetEnv = env.getName();
 
     String[] emergencyPublishSupportedEnvs = getArrayProperty("emergencyPublish.supported.envs", new String[0]);
 
@@ -228,7 +283,7 @@ public class PortalConfig extends RefreshableConfig {
   }
 
   public String wikiAddress() {
-    return getValue("wiki.address", "https://ctripcorp.github.io/apollo");
+    return getValue("wiki.address", "https://www.apolloconfig.com");
   }
 
   public boolean canAppAdminCreatePrivateNamespace() {
@@ -247,74 +302,27 @@ public class PortalConfig extends RefreshableConfig {
     return getValue("admin-service.access.tokens");
   }
 
-  /***
-   * The following configurations are used in ctrip profile
-   **/
-
-  public int appId() {
-    return getIntProperty("ctrip.appid", 0);
-  }
-
-  //send code & template id. apply from ewatch
-  public String sendCode() {
-    return getValue("ctrip.email.send.code");
-  }
-
-  public int templateId() {
-    return getIntProperty("ctrip.email.template.id", 0);
-  }
-
-  //email retention time in email server queue.TimeUnit: hour
-  public int survivalDuration() {
-    return getIntProperty("ctrip.email.survival.duration", 5);
-  }
-
-  public boolean isSendEmailAsync() {
-    return getBooleanProperty("email.send.async", true);
-  }
-
-  public String portalServerName() {
-    return getValue("serverName");
-  }
-
-  public String casServerLoginUrl() {
-    return getValue("casServerLoginUrl");
-  }
-
-  public String casServerUrlPrefix() {
-    return getValue("casServerUrlPrefix");
-  }
-
-  public String credisServiceUrl() {
-    return getValue("credisServiceUrl");
-  }
-
-  public String userServiceUrl() {
-    return getValue("userService.url");
-  }
-
-  public String userServiceAccessToken() {
-    return getValue("userService.accessToken");
-  }
-
-  public String soaServerAddress() {
-    return getValue("soa.server.address");
-  }
-
-  public String cloggingUrl() {
-    return getValue("clogging.server.url");
-  }
-
-  public String cloggingPort() {
-    return getValue("clogging.server.port");
-  }
-
-  public String hermesServerAddress() {
-    return getValue("hermes.server.address");
-  }
-
   public String[] webHookUrls() {
     return getArrayProperty("config.release.webhook.service.url", null);
   }
 
+  public boolean supportSearchByItem() {
+    return getBooleanProperty("searchByItem.switch", true);
+  }
+  
+  public List<String> getUserPasswordNotAllowList() {
+    String[] value = getArrayProperty("apollo.portal.auth.user-password-not-allow-list", null);
+    if (value == null || value.length == 0) {
+      return DEFAULT_USER_PASSWORD_NOT_ALLOW_LIST;
+    }
+    return Arrays.asList(value);
+  }
+
+  private int checkInt(int value, int min, int max, int defaultValue) {
+    if (value >= min && value <= max) {
+      return value;
+    }
+    logger.warn("Configuration value '{}' is out of bounds [{} - {}]. Using default value '{}'.", value, min, max, defaultValue);
+    return defaultValue;
+  }
 }

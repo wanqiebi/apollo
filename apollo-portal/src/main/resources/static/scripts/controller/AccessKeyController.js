@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 access_key_module.controller('AccessKeyController',
     ['$scope', '$location', '$translate', 'toastr',
         'AppService', 'AppUtil', 'PermissionService',
@@ -120,17 +136,19 @@ function AccessKeyController($scope, $location, $translate, toastr,
         }
     }
 
-    function enable(id, env) {
-        var confirmTips = $translate.instant('AccessKey.Operator.EnabledTips', {
+    function enable(id, env, mode) {
+        mode = (mode === 1) ? 1 : 0;
+        var tipsPrefix = mode === 1 ? 'AccessKey.Operator.Observed' : 'AccessKey.Operator.Enabled';
+        var confirmTips = $translate.instant(tipsPrefix + 'Tips', {
             appId: $scope.pageContext.appId
         });
         if (confirm(confirmTips)) {
-            AccessKeyService.enable_access_key($scope.pageContext.appId, env, id)
+            AccessKeyService.enable_access_key($scope.pageContext.appId, env, id, mode)
                 .then(function () {
-                    toastr.success($translate.instant('AccessKey.Operator.EnabledSuccess', {env}));
+                    toastr.success($translate.instant(tipsPrefix + 'Success', {env}));
                     loadAccessKeys(env);
                 }, function (result) {
-                    toastr.error(AppUtil.errorMsg(result), $translate.instant('AccessKey.Operator.EnabledError', {env}));
+                    toastr.error(AppUtil.errorMsg(result), $translate.instant(tipsPrefix + 'Error', {env}));
                 });
         }
     }

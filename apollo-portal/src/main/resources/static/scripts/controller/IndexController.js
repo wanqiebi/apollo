@@ -1,19 +1,40 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 index_module.controller('IndexController', ['$scope', '$window', '$translate', 'toastr', 'AppUtil', 'AppService',
-    'UserService', 'FavoriteService',
-    IndexController]);
+    'UserService', 'FavoriteService', 'NamespaceService',
+    IndexController]
+)
 
-function IndexController($scope, $window, $translate, toastr, AppUtil, AppService, UserService, FavoriteService) {
+
+function IndexController($scope, $window, $translate, toastr, AppUtil, AppService, UserService, FavoriteService, NamespaceService) {
 
     $scope.userId = '';
+    $scope.whichContent = '1';
 
     $scope.getUserCreatedApps = getUserCreatedApps;
     $scope.getUserFavorites = getUserFavorites;
-
+    $scope.getPublicNamespaces = getPublicNamespaces;
     $scope.goToAppHomePage = goToAppHomePage;
     $scope.goToCreateAppPage = goToCreateAppPage;
     $scope.toggleOperationBtn = toggleOperationBtn;
     $scope.toTop = toTop;
     $scope.deleteFavorite = deleteFavorite;
+    $scope.morePublicNamespace = morePublicNamespace;
+    $scope.changeContent = changeContent;
 
     function initCreateApplicationPermission() {
         AppService.has_create_application_role($scope.userId).then(
@@ -31,10 +52,14 @@ function IndexController($scope, $window, $translate, toastr, AppUtil, AppServic
 
         $scope.createdAppPage = 0;
         $scope.createdApps = [];
-        $scope.hasMoreCreatedApps = true;
+        $scope.hasMoreCreatedApps = false;
         $scope.favoritesPage = 0;
         $scope.favorites = [];
-        $scope.hasMoreFavorites = true;
+        $scope.hasMoreFavorites = false;
+        $scope.publicNamespacePage = 0;
+        $scope.publicNamespaces = [];
+        $scope.hasMorePublicNamespaces = false;
+        $scope.allPublicNamespaces = [];
         $scope.visitedApps = [];
 
         initCreateApplicationPermission();
@@ -43,7 +68,10 @@ function IndexController($scope, $window, $translate, toastr, AppUtil, AppServic
 
         getUserFavorites();
 
+        getPublicNamespaces();
+
         initUserVisitedApps();
+
     });
 
     function getUserCreatedApps() {
@@ -98,8 +126,31 @@ function IndexController($scope, $window, $translate, toastr, AppUtil, AppServic
                             app.favoriteId = favorite.id;
                             $scope.favorites.push(app);
                         });
-
                     });
+            })
+    }
+
+    function getPublicNamespaces() {
+        NamespaceService.find_public_namespaces()
+            .then(function (result) {
+                $scope.allPublicNamespaces = result;
+                morePublicNamespace();
+                var selectResult = [];
+                angular.forEach(result,function (app) {
+                    selectResult.push({
+                        id: app.appId,
+                        text: app.appId + ' / ' + app.name
+                    })
+                });
+                $('#public-name-spaces-search-list').select2({
+                    data: selectResult,
+                });
+                $('#public-name-spaces-search-list').on('select2:select', function () {
+                    var selected = $('#public-name-spaces-search-list').select2('data');
+                    if (selected && selected.length) {
+                        goToAppHomePage(selected[0].id)
+                    }
+                });
             })
     }
 
@@ -164,6 +215,26 @@ function IndexController($scope, $window, $translate, toastr, AppUtil, AppServic
         $scope.hasMoreFavorites = true;
 
         getUserFavorites();
+    }
+
+    function morePublicNamespace() {
+        var rest = $scope.allPublicNamespaces.length - $scope.publicNamespacePage * 10;
+        if (rest <= 10) {
+            for (var i = 0; i < rest; i++) {
+                $scope.publicNamespaces.push($scope.allPublicNamespaces[$scope.publicNamespacePage * 10 + i])
+            }
+            $scope.hasMorePublicNamespaces = false;
+        } else {
+            for (var j = 0; j < 10; j++) {
+                $scope.publicNamespaces.push($scope.allPublicNamespaces[$scope.publicNamespacePage * 10 + j])
+            }
+            $scope.hasMorePublicNamespaces = true;
+        }
+        $scope.publicNamespacePage += 1;
+    }
+
+    function changeContent(contentIndex) {
+        $scope.whichContent = contentIndex;
     }
 
 }

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.portal.controller;
 
 import com.ctrip.framework.apollo.common.dto.ItemChangeSets;
@@ -114,7 +130,7 @@ public class ItemController {
 
     // In case someone constructs an attack scenario
     if (namespace == null || item.getNamespaceId() != namespace.getId()) {
-      throw new BadRequestException("Invalid request, item and namespace do not match!");
+      throw BadRequestException.namespaceNotMatch();
     }
 
     configService.deleteItem(Env.valueOf(env), itemId, userInfoHolder.getUser().getUserId());
@@ -167,7 +183,7 @@ public class ItemController {
       }
 
       if (permissionValidator
-          .shouldHideConfigToCurrentUser(namespace.getAppId(), namespace.getEnv().name(), namespace.getNamespaceName())) {
+          .shouldHideConfigToCurrentUser(namespace.getAppId(), namespace.getEnv().getName(), namespace.getNamespaceName())) {
         diff.setDiffs(new ItemChangeSets());
         diff.setExtInfo("You are not this project's administrator, nor you have edit or release permission for the namespace in environment: " + namespace.getEnv());
       }
@@ -179,7 +195,7 @@ public class ItemController {
   @PutMapping(value = "/apps/{appId}/namespaces/{namespaceName}/items", consumes = {"application/json"})
   public ResponseEntity<Void> update(@PathVariable String appId, @PathVariable String namespaceName,
                                      @RequestBody NamespaceSyncModel model) {
-    checkModel(!model.isInvalid());
+    checkModel(!model.isInvalid() && model.syncToNamespacesValid(appId, namespaceName));
     boolean hasPermission = permissionValidator.hasModifyNamespacePermission(appId, namespaceName);
     Env envNoPermission = null;
     // if uses has ModifyNamespace permission then he has permission
@@ -233,8 +249,12 @@ public class ItemController {
     // use YamlPropertiesFactoryBean to check the yaml syntax
     TypeLimitedYamlPropertiesFactoryBean yamlPropertiesFactoryBean = new TypeLimitedYamlPropertiesFactoryBean();
     yamlPropertiesFactoryBean.setResources(new ByteArrayResource(model.getConfigText().getBytes()));
-    // this call converts yaml to properties and will throw exception if the conversion fails
-    yamlPropertiesFactoryBean.getObject();
+    try {
+      // this call converts yaml to properties and will throw exception if the conversion fails
+      yamlPropertiesFactoryBean.getObject();
+    }catch (Exception ex){
+      throw new BadRequestException(ex.getMessage());
+    }
   }
 
   private boolean isValidItem(ItemDTO item) {

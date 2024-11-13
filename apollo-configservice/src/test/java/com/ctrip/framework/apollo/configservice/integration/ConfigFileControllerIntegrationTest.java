@@ -1,7 +1,22 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.configservice.integration;
 
 import com.ctrip.framework.apollo.configservice.service.AppNamespaceServiceWithCache;
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.reflect.TypeToken;
@@ -43,7 +58,9 @@ public class ConfigFileControllerIntegrationTest extends AbstractBaseIntegration
   private String someDC;
   private String someDefaultCluster;
   private String grayClientIp;
+  private String grayClientLabel;
   private String nonGrayClientIp;
+  private String nonGrayClientLabel;
   private static final Gson GSON = new Gson();
   private ExecutorService executorService;
   private Type mapResponseType = new TypeToken<Map<String, String>>(){}.getType();
@@ -62,8 +79,10 @@ public class ConfigFileControllerIntegrationTest extends AbstractBaseIntegration
     somePublicNamespace = "somePublicNamespace";
     someDC = "someDC";
     grayClientIp = "1.1.1.1";
+    grayClientLabel = "myLabel";
     nonGrayClientIp = "2.2.2.2";
-    executorService = Executors.newSingleThreadExecutor();
+    nonGrayClientLabel = "appLabel";
+    executorService = Executors.newFixedThreadPool(1);
   }
 
   @Test
@@ -96,13 +115,13 @@ public class ConfigFileControllerIntegrationTest extends AbstractBaseIntegration
 
     ResponseEntity<String> response =
         restTemplate
-            .getForEntity("http://{baseurl}/configfiles/{appId}/{clusterName}/{namespace}?ip={clientIp}", String.class,
-                getHostUrl(), someAppId, someDefaultCluster, ConfigConsts.NAMESPACE_APPLICATION, grayClientIp);
+            .getForEntity("http://{baseurl}/configfiles/{appId}/{clusterName}/{namespace}?ip={clientIp}&label={clientLabel}", String.class,
+                getHostUrl(), someAppId, someDefaultCluster, ConfigConsts.NAMESPACE_APPLICATION, grayClientIp, grayClientLabel);
 
     ResponseEntity<String> anotherResponse =
         restTemplate
-            .getForEntity("http://{baseurl}/configfiles/{appId}/{clusterName}/{namespace}?ip={clientIp}", String.class,
-                getHostUrl(), someAppId, someDefaultCluster, ConfigConsts.NAMESPACE_APPLICATION, nonGrayClientIp);
+            .getForEntity("http://{baseurl}/configfiles/{appId}/{clusterName}/{namespace}?ip={clientIp}&label={clientLabel}", String.class,
+                getHostUrl(), someAppId, someDefaultCluster, ConfigConsts.NAMESPACE_APPLICATION, nonGrayClientIp, nonGrayClientLabel);
 
     String result = response.getBody();
     String anotherResult = anotherResponse.getBody();
@@ -219,16 +238,16 @@ public class ConfigFileControllerIntegrationTest extends AbstractBaseIntegration
     ResponseEntity<String> response =
         restTemplate
             .getForEntity(
-                "http://{baseurl}/configfiles/json/{appId}/{clusterName}/{namespace}?ip={clientIp}",
+                "http://{baseurl}/configfiles/json/{appId}/{clusterName}/{namespace}?ip={clientIp}&label={clientLabel}",
                 String.class,
-                getHostUrl(), someAppId, someDefaultCluster, somePublicNamespace, grayClientIp);
+                getHostUrl(), someAppId, someDefaultCluster, somePublicNamespace, grayClientIp, grayClientLabel);
 
     ResponseEntity<String> anotherResponse =
         restTemplate
             .getForEntity(
-                "http://{baseurl}/configfiles/json/{appId}/{clusterName}/{namespace}?ip={clientIp}",
+                "http://{baseurl}/configfiles/json/{appId}/{clusterName}/{namespace}?ip={clientIp}&label={clientLabel}",
                 String.class,
-                getHostUrl(), someAppId, someDefaultCluster, somePublicNamespace, nonGrayClientIp);
+                getHostUrl(), someAppId, someDefaultCluster, somePublicNamespace, nonGrayClientIp, nonGrayClientLabel);
 
     Map<String, String> configs = GSON.fromJson(response.getBody(), mapResponseType);
     Map<String, String> anotherConfigs = GSON.fromJson(anotherResponse.getBody(), mapResponseType);
@@ -260,16 +279,16 @@ public class ConfigFileControllerIntegrationTest extends AbstractBaseIntegration
     ResponseEntity<String> response =
         restTemplate
             .getForEntity(
-                "http://{baseurl}/configfiles/json/{appId}/{clusterName}/{namespace}?ip={clientIp}",
+                "http://{baseurl}/configfiles/json/{appId}/{clusterName}/{namespace}?ip={clientIp}&label={clientLabel}",
                 String.class,
-                getHostUrl(), someAppId, someDefaultCluster, somePublicNamespace.toUpperCase(), grayClientIp);
+                getHostUrl(), someAppId, someDefaultCluster, somePublicNamespace.toUpperCase(), grayClientIp, grayClientLabel);
 
     ResponseEntity<String> anotherResponse =
         restTemplate
             .getForEntity(
-                "http://{baseurl}/configfiles/json/{appId}/{clusterName}/{namespace}?ip={clientIp}",
+                "http://{baseurl}/configfiles/json/{appId}/{clusterName}/{namespace}?ip={clientIp}&label={clientLabel}",
                 String.class,
-                getHostUrl(), someAppId, someDefaultCluster, somePublicNamespace.toUpperCase(), nonGrayClientIp);
+                getHostUrl(), someAppId, someDefaultCluster, somePublicNamespace.toUpperCase(), nonGrayClientIp, nonGrayClientLabel);
 
     Map<String, String> configs = GSON.fromJson(response.getBody(), mapResponseType);
     Map<String, String> anotherConfigs = GSON.fromJson(anotherResponse.getBody(), mapResponseType);
@@ -334,7 +353,4 @@ public class ConfigFileControllerIntegrationTest extends AbstractBaseIntegration
     assertTrue(result.contains("k2=v2-changed"));
   }
 
-  private String assembleKey(String appId, String cluster, String namespace) {
-    return Joiner.on(ConfigConsts.CLUSTER_NAMESPACE_SEPARATOR).join(appId, cluster, namespace);
-  }
 }

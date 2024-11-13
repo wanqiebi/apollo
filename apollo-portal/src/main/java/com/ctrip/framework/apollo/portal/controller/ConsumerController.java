@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package com.ctrip.framework.apollo.portal.controller;
 
 import com.ctrip.framework.apollo.common.dto.NamespaceDTO;
@@ -7,9 +23,12 @@ import com.ctrip.framework.apollo.openapi.entity.Consumer;
 import com.ctrip.framework.apollo.openapi.entity.ConsumerRole;
 import com.ctrip.framework.apollo.openapi.entity.ConsumerToken;
 import com.ctrip.framework.apollo.openapi.service.ConsumerService;
+import com.ctrip.framework.apollo.portal.entity.vo.consumer.ConsumerCreateRequestVO;
+import com.ctrip.framework.apollo.portal.entity.vo.consumer.ConsumerInfo;
 import com.ctrip.framework.apollo.portal.environment.Env;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,40 +50,70 @@ public class ConsumerController {
     this.consumerService = consumerService;
   }
 
+  private Consumer convertToConsumer(ConsumerCreateRequestVO requestVO) {
+    Consumer consumer = new Consumer();
+    consumer.setAppId(requestVO.getAppId());
+    consumer.setName(requestVO.getName());
+    consumer.setOwnerName(requestVO.getOwnerName());
+    consumer.setOrgId(requestVO.getOrgId());
+    consumer.setOrgName(requestVO.getOrgName());
+    return consumer;
+  }
 
   @Transactional
   @PreAuthorize(value = "@permissionValidator.isSuperAdmin()")
   @PostMapping(value = "/consumers")
-  public ConsumerToken createConsumer(@RequestBody Consumer consumer,
-                                      @RequestParam(value = "expires", required = false)
-                                      @DateTimeFormat(pattern = "yyyyMMddHHmmss") Date
-                                          expires) {
-
-    if (StringUtils.isContainEmpty(consumer.getAppId(), consumer.getName(),
-                                   consumer.getOwnerName(), consumer.getOrgId())) {
-      throw new BadRequestException("Params(appId、name、ownerName、orgId) can not be empty.");
+  public ConsumerInfo create(
+      @RequestBody ConsumerCreateRequestVO requestVO,
+      @RequestParam(value = "expires", required = false)
+      @DateTimeFormat(pattern = "yyyyMMddHHmmss") Date expires
+  ) {
+    if (StringUtils.isBlank(requestVO.getAppId())) {
+      throw BadRequestException.appIdIsBlank();
+    }
+    if (StringUtils.isBlank(requestVO.getName())) {
+      throw BadRequestException.appNameIsBlank();
+    }
+    if (StringUtils.isBlank(requestVO.getOwnerName())) {
+      throw BadRequestException.ownerNameIsBlank();
+    }
+    if (StringUtils.isBlank(requestVO.getOrgId())) {
+      throw BadRequestException.orgIdIsBlank();
     }
 
-    Consumer createdConsumer = consumerService.createConsumer(consumer);
+    Consumer createdConsumer = consumerService.createConsumer(convertToConsumer(requestVO));
 
     if (Objects.isNull(expires)) {
       expires = DEFAULT_EXPIRES;
     }
 
-    return consumerService.generateAndSaveConsumerToken(createdConsumer, expires);
+    ConsumerToken consumerToken = consumerService.generateAndSaveConsumerToken(createdConsumer, expires);
+    if (requestVO.isAllowCreateApplication()) {
+      consumerService.assignCreateApplicationRoleToConsumer(consumerToken.getToken());
+    }
+    return consumerService.getConsumerInfoByAppId(requestVO.getAppId());
   }
 
-  @GetMapping(value = "/consumers/by-appId")
+  @PreAuthorize(value = "@permissionValidator.isSuperAdmin()")
+  @GetMapping(value = "/consumer-tokens/by-appId")
   public ConsumerToken getConsumerTokenByAppId(@RequestParam String appId) {
     return consumerService.getConsumerTokenByAppId(appId);
   }
 
   @PreAuthorize(value = "@permissionValidator.isSuperAdmin()")
+  @GetMapping(value = "/consumer/info/by-appId")
+  public ConsumerInfo getConsumerInfoByAppId(@RequestParam String appId) {
+    return consumerService.getConsumerInfoByAppId(appId);
+  }
+
+  @PreAuthorize(value = "@permissionValidator.isSuperAdmin()")
   @PostMapping(value = "/consumers/{token}/assign-role")
-  public List<ConsumerRole> assignNamespaceRoleToConsumer(@PathVariable String token,
-                                                          @RequestParam String type,
-                                                          @RequestParam(required = false) String envs,
-                                                          @RequestBody NamespaceDTO namespace) {
+  public List<ConsumerRole> assignNamespaceRoleToConsumer(
+      @PathVariable String token,
+      @RequestParam String type,
+      @RequestParam(required = false) String envs,
+      @RequestBody NamespaceDTO namespace) {
+    List<ConsumerRole> consumerRoleList = new ArrayList<>(8);
 
     String appId = namespace.getAppId();
     String namespaceName = namespace.getNamespaceName();
@@ -87,7 +136,7 @@ public class ConsumerController {
           continue;
         }
         if (Env.UNKNOWN.equals(Env.transformEnv(env))) {
-          throw new BadRequestException(String.format("env: %s is illegal", env));
+          throw BadRequestException.invalidEnvFormat(env);
         }
         envList.add(env);
       }
@@ -99,9 +148,22 @@ public class ConsumerController {
       return consumeRoles;
     }
 
-    return consumerService.assignNamespaceRoleToConsumer(token, appId, namespaceName);
+    consumerRoleList.addAll(
+        consumerService.assignNamespaceRoleToConsumer(token, appId, namespaceName)
+    );
+    return consumerRoleList;
   }
 
+  @GetMapping("/consumers")
+  @PreAuthorize(value = "@permissionValidator.isSuperAdmin()")
+  public List<ConsumerInfo> getConsumerList(Pageable page){
+    return consumerService.findConsumerInfoList(page);
+  }
 
+  @DeleteMapping(value = "/consumers/by-appId")
+  @PreAuthorize(value = "@permissionValidator.isSuperAdmin()")
+  public void deleteConsumers(@RequestParam String appId) {
+    consumerService.deleteConsumer(appId);
+  }
 
 }

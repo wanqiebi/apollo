@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 directive_module.directive('rulesmodal', rulesModalDirective);
 
 function rulesModalDirective($translate, toastr, AppUtil, EventManager, InstanceService) {
@@ -16,18 +32,22 @@ function rulesModalDirective($translate, toastr, AppUtil, EventManager, Instance
             scope.completeEditBtnDisable = false;
 
             scope.batchAddIPs = batchAddIPs;
+            scope.batchAddLabels = batchAddLabels;
             scope.addRules = addRules;
             scope.removeRule = removeRule;
+            scope.removeRuleLabel = removeRuleLabel;
             scope.completeEditItem = completeEditItem;
             scope.cancelEditItem = cancelEditItem;
             scope.initSelectIps = initSelectIps;
+            scope.changeApplyToAllInstancesToTrue = changeApplyToAllInstancesToTrue;
+            scope.changeApplyToAllInstancesToFalse = changeApplyToAllInstancesToFalse;
 
             EventManager.subscribe(EventManager.EventType.EDIT_GRAY_RELEASE_RULES,
                 function (context) {
                     var branch = context.branch;
                     scope.branch = branch;
 
-                    if (branch.editingRuleItem.clientIpList && branch.editingRuleItem.clientIpList[0] == '*') {
+                    if (branch.editingRuleItem.clientIpList && branch.editingRuleItem.clientIpList[0] == '*' && branch.editingRuleItem.clientLabelList && branch.editingRuleItem.clientLabelList[0] == '*') {
                         branch.editingRuleItem.ApplyToAllInstances = true;
                     } else {
                         branch.editingRuleItem.ApplyToAllInstances = false;
@@ -45,6 +65,20 @@ function rulesModalDirective($translate, toastr, AppUtil, EventManager, Instance
             $('.rules-ip-selector').on('select2:select', function () {
                 addRules(scope.branch);
             });
+
+            function changeApplyToAllInstancesToTrue(branch) {
+                branch.editingRuleItem.ApplyToAllInstances = true;
+            }
+
+            function changeApplyToAllInstancesToFalse(branch) {
+                branch.editingRuleItem.ApplyToAllInstances = false;
+                if (branch.editingRuleItem.draftIpList[0] == '*') {
+                    branch.editingRuleItem.draftIpList = [];
+                }
+                if (branch.editingRuleItem.draftLabelList[0] == '*') {
+                    branch.editingRuleItem.draftLabelList = [];
+                }
+            }
 
             function addRules(branch) {
                 var newRules, selector = $('.rules-ip-selector');
@@ -68,6 +102,13 @@ function rulesModalDirective($translate, toastr, AppUtil, EventManager, Instance
                 addRuleItemIP(branch, newIPs.split(','));
             }
 
+            function batchAddLabels(branch, newLabels) {
+                if (!newLabels) {
+                    return;
+                }
+                addRuleItemLabel(branch, newLabels.split(','));
+            }
+
             function addRuleItemIP(branch, newIps) {
                 var oldIPs = branch.editingRuleItem.draftIpList;
                 if (newIps && newIps.length > 0) {
@@ -87,12 +128,37 @@ function rulesModalDirective($translate, toastr, AppUtil, EventManager, Instance
                 });
 
             }
-
+            function addRuleItemLabel(branch, newLabels) {
+                var oldLabels = branch.editingRuleItem.draftLabelList;
+                if (newLabels && newLabels.length > 0) {
+                    newLabels.forEach(function (Label) {
+                        if (oldLabels.indexOf(Label) < 0) {
+                            oldLabels.push(Label);
+                        }
+                    })
+                }
+                //remove Label:all
+                oldLabels.forEach(function (Label, index) {
+                    if (Label == "*") {
+                        oldLabels.splice(index, 1);
+                    }
+                });
+            }
             function removeRule(ruleItem, IP) {
 
                 ruleItem.draftIpList.forEach(function (existedRule, index) {
                     if (existedRule == IP) {
                         ruleItem.draftIpList.splice(index, 1);
+                    }
+                })
+
+            }
+
+            function removeRuleLabel(ruleItem, Label) {
+
+                ruleItem.draftLabelList.forEach(function (existedRule, index) {
+                    if (existedRule == Label) {
+                        ruleItem.draftLabelList.splice(index, 1);
                     }
                 })
 
@@ -122,15 +188,17 @@ function rulesModalDirective($translate, toastr, AppUtil, EventManager, Instance
                 }
 
                 if (!branch.editingRuleItem.ApplyToAllInstances) {
-                    if (branch.editingRuleItem.draftIpList.length == 0) {
-                        toastr.error($translate.instant('RulesModal.IpListCanNotBeNull'));
+                    if ((branch.editingRuleItem.draftIpList.length == 0)&&(branch.editingRuleItem.draftLabelList.length == 0)) {
+                        toastr.error($translate.instant('RulesModal.RuleListCanNotBeNull'));
                         scope.completeEditBtnDisable = false;
                         return;
                     } else {
                         branch.editingRuleItem.clientIpList = branch.editingRuleItem.draftIpList;
+                        branch.editingRuleItem.clientLabelList = branch.editingRuleItem.draftLabelList;
                     }
                 } else {
                     branch.editingRuleItem.clientIpList = ['*'];
+                    branch.editingRuleItem.clientLabelList = ['*'];
                 }
 
                 if (!branch.rules) {
@@ -152,6 +220,7 @@ function rulesModalDirective($translate, toastr, AppUtil, EventManager, Instance
 
                 branch.editingRuleItem = undefined;
                 scope.toAddIPs = '';
+                scope.toAddLabels = '';
 
                 AppUtil.hideModal('#rulesModal');
 
@@ -166,6 +235,7 @@ function rulesModalDirective($translate, toastr, AppUtil, EventManager, Instance
                 branch.editingRuleItem.isEdit = false;
                 branch.editingRuleItem = undefined;
                 scope.toAddIPs = '';
+                scope.toAddLabels = '';
                 AppUtil.hideModal('#rulesModal');
             }
 

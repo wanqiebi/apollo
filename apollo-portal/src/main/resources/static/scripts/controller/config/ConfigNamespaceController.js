@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Apollo Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 application_module.controller("ConfigNamespaceController",
     ['$rootScope', '$scope', '$translate', 'toastr', 'AppUtil', 'EventManager', 'ConfigService',
         'PermissionService', 'UserService', 'NamespaceBranchService', 'NamespaceService',
@@ -91,12 +107,12 @@ function controller($rootScope, $scope, $translate, toastr, AppUtil, EventManage
             if (context.namespace) {
                 refreshSingleNamespace(context.namespace);
             } else {
-                refreshAllNamespaces();
+                refreshAllNamespaces(context);
             }
 
         });
 
-    function refreshAllNamespaces() {
+    function refreshAllNamespaces(context) {
         if ($rootScope.pageContext.env == '') {
             return;
         }
@@ -110,6 +126,19 @@ function controller($rootScope, $scope, $translate, toastr, AppUtil, EventManage
                     $('.config-item-container').removeClass('hide');
 
                     initPublishInfo();
+                    //If there is a namespace parameter in the URL, expand the corresponding namespace directly
+                    if (context && context.firstLoad && $rootScope.pageContext.namespaceName) {
+                        refreshSingleNamespace({
+                            baseInfo: {
+                                namespaceName: $rootScope.pageContext.namespaceName
+                            },
+                            searchInfo: {
+                                showSearchInput: true,
+                                searchItemKey: $rootScope.pageContext.item,
+                            }
+
+                        });
+                    }
                 }, function (result) {
                     toastr.error(AppUtil.errorMsg(result), $translate.instant('Config.LoadingAllNamespaceError'));
                 });
@@ -120,6 +149,9 @@ function controller($rootScope, $scope, $translate, toastr, AppUtil, EventManage
             return;
         }
 
+        const showSearchItemInput = namespace.searchInfo ? namespace.searchInfo.showSearchInput : false;
+        const searchItemKey = namespace.searchInfo ? namespace.searchInfo.searchItemKey : '';
+
         ConfigService.load_namespace($rootScope.pageContext.appId,
             $rootScope.pageContext.env,
             $rootScope.pageContext.clusterName,
@@ -127,11 +159,13 @@ function controller($rootScope, $scope, $translate, toastr, AppUtil, EventManage
                 function (result) {
 
                     $scope.namespaces.forEach(function (namespace, index) {
-                        if (namespace.baseInfo.namespaceName == result.baseInfo.namespaceName) {
+                        if (namespace.baseInfo.namespaceName === result.baseInfo.namespaceName) {
                             result.showNamespaceBody = true;
                             result.initialized = true;
                             result.show = namespace.show;
                             $scope.namespaces[index] = result;
+                            result.showSearchItemInput = showSearchItemInput;
+                            result.searchItemKey = searchItemKey;
                         }
                     });
 
@@ -216,7 +250,7 @@ function controller($rootScope, $scope, $translate, toastr, AppUtil, EventManage
         }
 
         $scope.item = _.clone(toEditItem);
-
+        $scope.item.type = String($scope.item.type || 0)
         if (namespace.isBranch || namespace.isLinkedNamespace) {
             var existedItem = false;
             namespace.items.forEach(function (item) {
@@ -249,6 +283,9 @@ function controller($rootScope, $scope, $translate, toastr, AppUtil, EventManage
         $scope.item = {
             tableViewOperType: 'create'
         };
+        $scope.item.type = '0';
+        $scope.showNumberError = false;
+        $scope.showJsonError = false;
 
         $scope.toOperationNamespace = namespace;
         AppUtil.showModal('#itemModal');
@@ -370,33 +407,6 @@ function controller($rootScope, $scope, $translate, toastr, AppUtil, EventManage
 
     }
 
-    EventManager.subscribe(EventManager.EventType.DELETE_NAMESPACE_FAILED, function (context) {
-        $scope.deleteNamespaceContext = context;
-
-        if (context.reason == 'master_instance') {
-            AppUtil.showModal('#deleteNamespaceDenyForMasterInstanceDialog');
-        } else if (context.reason == 'branch_instance') {
-            AppUtil.showModal('#deleteNamespaceDenyForBranchInstanceDialog');
-        } else if (context.reason == 'public_namespace') {
-            var otherAppAssociatedNamespaces = context.otherAppAssociatedNamespaces;
-            var namespaceTips = [];
-            otherAppAssociatedNamespaces.forEach(function (namespace) {
-                var appId = namespace.appId;
-                var clusterName = namespace.clusterName;
-                var url = AppUtil.prefixPath() + '/config.html?#/appid=' + appId + '&env=' + $scope.pageContext.env + '&cluster='
-                    + clusterName;
-
-                namespaceTips.push("<a target='_blank' href=\'" + url + "\'>AppId = " + appId + ", Cluster = " + clusterName
-                    + ", Namespace = " + namespace.namespaceName + "</a>");
-            });
-
-            $scope.deleteNamespaceContext.detailReason = $translate.instant('Config.DeleteNamespaceFailedTips') + "<br>" + namespaceTips.join("<br>");
-
-            AppUtil.showModal('#deleteNamespaceDenyForPublicNamespaceDialog');
-        }
-
-    });
-
     EventManager.subscribe(EventManager.EventType.SYNTAX_CHECK_TEXT_FAILED, function (context) {
         $scope.syntaxCheckContext = context;
 
@@ -407,5 +417,4 @@ function controller($rootScope, $scope, $translate, toastr, AppUtil, EventManage
 
 
 }
-
 
