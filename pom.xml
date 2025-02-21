@@ -67,6 +67,7 @@
 		<spring-boot.version>2.7.18</spring-boot.version>
 		<spring-cloud.version>2021.0.5</spring-cloud.version>
 		<spring-security.version>5.7.13</spring-security.version>
+		<spring-webmvc.version>5.3.41</spring-webmvc.version>
 		<logback.version>1.2.13</logback.version>
 		<!-- sort by alphabet -->
 		<awaitility.version>4.2.0</awaitility.version>
@@ -276,6 +277,11 @@
 				<groupId>org.springframework.security</groupId>
 				<artifactId>spring-security-crypto</artifactId>
 				<version>${spring-security.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-webmvc</artifactId>
+				<version>${spring-webmvc.version}</version>
 			</dependency>
 			<!-- required by eureka -->
 			<dependency>
