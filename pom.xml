@@ -69,10 +69,12 @@
 		<spring-security.version>5.7.13</spring-security.version>
 		<spring-security-crypto.version>5.7.17</spring-security-crypto.version>
 		<spring-webmvc.version>5.3.41</spring-webmvc.version>
+		<spring-web.version>5.3.45</spring-web.version>
 		<logback.version>1.2.13</logback.version>
+		<netty.version>4.1.131.Final</netty.version>
 		<!-- sort by alphabet -->
 		<awaitility.version>4.2.0</awaitility.version>
-		<common-lang3.version>3.12.0</common-lang3.version>
+		<common-lang3.version>3.20.0</common-lang3.version>
 		<gson.version>2.10.1</gson.version>
 		<guava.version>32.0.0-jre</guava.version>
 		<javassist.version>3.23.1-GA</javassist.version>
@@ -247,6 +249,13 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-bom</artifactId>
+				<version>${netty.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 			<!-- declare Spring BOMs in order -->
 			<dependency>
 				<groupId>org.springframework.boot</groupId>
@@ -297,6 +306,11 @@
 				<groupId>org.springframework</groupId>
 				<artifactId>spring-webmvc</artifactId>
 				<version>${spring-webmvc.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-web</artifactId>
+				<version>${spring-web.version}</version>
 			</dependency>
 			<!-- required by eureka -->
 			<dependency>
