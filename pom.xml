@@ -68,8 +68,10 @@
 		<spring-cloud.version>2021.0.5</spring-cloud.version>
 		<spring-security.version>5.7.13</spring-security.version>
 		<spring-security-crypto.version>5.7.17</spring-security-crypto.version>
-		<spring-webmvc.version>5.3.41</spring-webmvc.version>
+		<spring-core.version>5.3.45</spring-core.version>
+		<spring-webmvc.version>5.3.45</spring-webmvc.version>
 		<spring-web.version>5.3.45</spring-web.version>
+		<spring-boot-actuator.version>2.7.32</spring-boot-actuator.version>
 		<logback.version>1.2.13</logback.version>
 		<netty.version>4.1.131.Final</netty.version>
 		<!-- sort by alphabet -->
@@ -304,6 +306,11 @@
 			</dependency>
 			<dependency>
 				<groupId>org.springframework</groupId>
+				<artifactId>spring-core</artifactId>
+				<version>${spring-core.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
 				<artifactId>spring-webmvc</artifactId>
 				<version>${spring-webmvc.version}</version>
 			</dependency>
@@ -311,6 +318,16 @@
 				<groupId>org.springframework</groupId>
 				<artifactId>spring-web</artifactId>
 				<version>${spring-web.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-actuator</artifactId>
+				<version>${spring-boot-actuator.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-actuator-autoconfigure</artifactId>
+				<version>${spring-boot-actuator.version}</version>
 			</dependency>
 			<!-- required by eureka -->
 			<dependency>
